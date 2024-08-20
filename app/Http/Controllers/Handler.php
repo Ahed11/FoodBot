@@ -8,8 +8,10 @@
     use DefStudio\Telegraph\Keyboard\Keyboard;
     use DefStudio\Telegraph\Models\TelegraphBot;
     use DefStudio\Telegraph\Models\TelegraphChat;
+    use Illuminate\Support\Facades\Http;
 
     class Handler extends WebhookHandler{
+
         public function start(){
             $bot = TelegraphBot::where('id', 1)->firstOrFail();
             $requestArray = $this->request->toArray();
@@ -70,29 +72,22 @@
             $dishName = $dish->name;
             $dishPrice = $dish->price;
 
-            $ingredients = ingredients::where("dish_id", $dishId)->get()->all();
+            $ingredientsName = ingredients::where("dish_id", $dishId)->get()->pluck("name");
 
-            $ingredientName = [];
-
-            if($ingredients != null){
-                foreach($ingredients as $ingredient){
-                    $ingredientName[$ingredient->id] = $ingredient->name;
-                }
+            if($ingredientsName != null){
                 $dishIngredients = "";
-                foreach($ingredientName as $key => $value){
-                    if($dishIngredients != null){
-                        $dishIngredients = "{$dishIngredients}, " . $ingredientName[$key];
-                    } else{
-                        $dishIngredients = "$ingredientName[$key]";
-                    }
+
+                foreach($ingredientsName as $value){
+                    $dishIngredients = "{$dishIngredients}" . "\n" . $value;
                 }
-                $chatBot->message("Food name: {$dishName}\nFood price: {$dishPrice}\nFood ingredients: $dishIngredients")->Keyboard(Keyboard::make()->buttons([
+
+                $chatBot->message("*Food name*: {$dishName}\n*Food price*: {$dishPrice}\n*Food ingredients*: $dishIngredients")->Keyboard(Keyboard::make()->buttons([
                     Button::make("Buy {$dishName} for {$dishPrice}")->action("buy_dish")->param("id", $dishId)
                 ]))->send();
 
                 $this->reply("");
             }else{
-                $chatBot->message("Food name: {$dishName}\nFood price: {$dishPrice}\n")->Keyboard(Keyboard::make()->buttons([
+                $chatBot->message("*Food name*: {$dishName}\n*Food price*: {$dishPrice}\n")->Keyboard(Keyboard::make()->buttons([
                     Button::make("Buy {$dishName} for {$dishPrice}")->action("buy_dish")->param("id", $dishId)
                 ]))->send();
 
@@ -118,5 +113,40 @@
             $chatBot->message("You bought a $dishName")->send();
 
             $this->reply("");
+        }
+
+        public static function sendInvoice(string $title, string $description, int $amount){
+            $bot = TelegraphBot::where("id",1)->firstOrFail();
+
+            $botToken = $bot->token;
+
+            $token = env("PAY_MASTER_TOKEN");
+
+            // $requestArray = $this->request->toArray();
+
+            // $chatId = $requestArray["callback_query"]["from"]["id"];
+
+            $payload = \Str::uuid();
+
+            $currency = "RUB";
+
+            $url = "https://api.telegram.org/bot{$botToken}/sendInvoice";
+
+            $respone = Http::post($url, [
+                "chat_id" => 5134069019,
+                "title" => $title,
+                "description"=> $description,
+                "payload" => $payload,
+                "currency" => $currency,
+                "prices" => [
+                    [
+                        "label" => "price",
+                        "amount" => $amount,
+                    ]
+                    ],
+                "provider_token" => $token
+            ]);
+
+            return $respone->json();
         }
     }
